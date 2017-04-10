@@ -204,6 +204,8 @@ void Renderer::publishImageAndClearEvents()
       cv_image.image -= off_events;
     }
 
+    cv_image.header.stamp = events_[events_.size()/2].ts;
+
     image_pub_.publish(cv_image.toImageMsg());
 
     if (got_camera_info_ && undistorted_image_pub_.getNumSubscribers() > 0)
