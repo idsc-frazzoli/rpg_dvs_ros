@@ -32,6 +32,7 @@ Renderer::Renderer(ros::NodeHandle & nh, ros::NodeHandle nh_private) : nh_(nh),
 
   integration_length_ = nh_private.param("integration_length", 50);
   use_milliseconds_   = nh_private.param("use_milliseconds", true);
+  ignore_polarity_    = nh_private.param("ignore_polarity", false);
 
   // setup subscribers and publishers
   event_sub_ = nh_.subscribe("events", 1, &Renderer::eventsCallback, this);
@@ -176,32 +177,54 @@ void Renderer::publishImageAndClearEvents()
     {
       cv_image.encoding = "mono8";
       cv_image.image = cv::Mat(last_image_.size(), CV_8U);
-      cv_image.image = cv::Scalar(128);
 
-      cv::Mat on_events = cv::Mat(last_image_.size(), CV_8U);
-      on_events = cv::Scalar(0);
-
-      cv::Mat off_events = cv::Mat(last_image_.size(), CV_8U);
-      off_events = cv::Scalar(0);
-
-      // count events per pixels with polarity
-      for (int i = 0; i < events_.size(); ++i)
+      if (ignore_polarity_)
       {
-        const int x = events_[i].x;
-        const int y = events_[i].y;
+        cv_image.image = cv::Scalar(0);
 
-        if (events_[i].polarity == 1)
-          on_events.at<uint8_t>(cv::Point(x, y))++;
-        else
-          off_events.at<uint8_t>(cv::Point(x, y))++;
-      }
+        for (int i = 0; i < events_.size(); ++i)
+        {
+          const int x = events_[i].x;
+          const int y = events_[i].y;
+
+          cv_image.image.at<uint8_t>(cv::Point(x, y))++;
+        }
 
         // scale image
-      cv::normalize(on_events, on_events, 0, 128, cv::NORM_MINMAX, CV_8UC1);
-      cv::normalize(off_events, off_events, 0, 127, cv::NORM_MINMAX, CV_8UC1);
+        cv::normalize(cv_image.image, cv_image.image, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+      }
+      else
+      {
+        cv_image.image = cv::Scalar(128);
 
-      cv_image.image += on_events;
-      cv_image.image -= off_events;
+        cv::Mat on_events = cv::Mat(last_image_.size(), CV_8U);
+        on_events = cv::Scalar(0);
+
+        cv::Mat off_events = cv::Mat(last_image_.size(), CV_8U);
+        off_events = cv::Scalar(0);
+
+
+
+        // count events per pixels with polarity
+        for (int i = 0; i < events_.size(); ++i)
+        {
+          const int x = events_[i].x;
+          const int y = events_[i].y;
+
+          if (events_[i].polarity == 1)
+            on_events.at<uint8_t>(cv::Point(x, y))++;
+          else
+            off_events.at<uint8_t>(cv::Point(x, y))++;
+        }
+
+          // scale image
+        cv::normalize(on_events, on_events, 0, 128, cv::NORM_MINMAX, CV_8UC1);
+        cv::normalize(off_events, off_events, 0, 127, cv::NORM_MINMAX, CV_8UC1);
+
+        cv_image.image += on_events;
+        cv_image.image -= off_events;
+      }
+
     }
 
     cv_image.header.stamp = events_[events_.size()/2].ts;

@@ -67,6 +67,7 @@ private:
 
   size_t integration_length_;
   bool use_milliseconds_;
+  bool ignore_polarity_;
 
   std::deque<dvs_msgs::Event> events_;
 
