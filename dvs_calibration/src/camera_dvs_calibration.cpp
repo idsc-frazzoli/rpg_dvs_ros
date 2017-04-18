@@ -80,7 +80,7 @@ void CameraDvsCalibration::calibrate()
 
   // call stereo calibration
   cv::Mat R, T, E, F;
-  bool flags = fix_intrinsics_ ? CV_CALIB_FIX_INTRINSIC : CV_CALIB_USE_INTRINSIC_GUESS;
+  int flags = fix_intrinsics_ ? CV_CALIB_FIX_INTRINSIC : CV_CALIB_USE_INTRINSIC_GUESS;
 
   cv::TermCriteria term_crit = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 1e-6);
   double reproj_error = cv::stereoCalibrate(object_points_, image_points_camera_, image_points_dvs_,

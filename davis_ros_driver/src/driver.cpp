@@ -35,7 +35,7 @@ DavisRosDriver::DavisRosDriver(ros::NodeHandle & nh, ros::NodeHandle nh_private)
     parameter_bias_update_required_(false),
     imu_calibration_running_(false)
 {
-  
+
   // load parameters
   std::string dvs_serial_number;
   nh_private.param<std::string>("serial_number", dvs_serial_number, "");
@@ -58,7 +58,7 @@ DavisRosDriver::DavisRosDriver(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   ns = ros::this_node::getNamespace();
   if (ns == "/")
     ns = "/dvs";
-  
+
   event_array_pub_ = nh_.advertise<dvs_msgs::EventArray>(ns + "/events", 10);
   camera_info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>(ns + "/camera_info", 1);
   imu_pub_ = nh_.advertise<sensor_msgs::Imu>(ns + "/imu", 10);
@@ -67,7 +67,7 @@ DavisRosDriver::DavisRosDriver(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   caerConnect();
   current_config_.streaming_rate = 30;
   delta_ = boost::posix_time::microseconds(1e6/current_config_.streaming_rate);
-  
+
   reset_sub_ = nh_.subscribe((ns + "/reset_timestamps").c_str(), 1, &DavisRosDriver::resetTimestampsCallback, this);
   imu_calibration_sub_ = nh_.subscribe((ns + "/calibrate_imu").c_str(), 1, &DavisRosDriver::imuCalibrationCallback, this);
   snapshot_sub_ = nh_.subscribe((ns + "/trigger_snapshot").c_str(), 1, &DavisRosDriver::snapshotCallback, this);
@@ -101,7 +101,7 @@ DavisRosDriver::~DavisRosDriver()
 
 void DavisRosDriver::caerConnect()
 {
-  
+
   // start driver
   bool dvs_running = false;
   while (!dvs_running)
@@ -126,32 +126,32 @@ void DavisRosDriver::caerConnect()
   }
 
   davis_info_ = caerDavisInfoGet(davis_handle_);
-  device_id_ = "DAVIS-" + std::string(davis_info_.deviceString).substr(18, 7);
+  device_id_ = "DAVIS-" + std::string(davis_info_.deviceString).substr(18, 8);
 
   ROS_INFO("%s --- ID: %d, Master: %d, DVS X: %d, DVS Y: %d, Logic: %d.\n", davis_info_.deviceString,
            davis_info_.deviceID, davis_info_.deviceIsMaster, davis_info_.dvsSizeX, davis_info_.dvsSizeY,
            davis_info_.logicVersion);
- 
+
   // Send the default configuration before using the device.
   // No configuration is sent automatically!
   caerDeviceSendDefaultConfig(davis_handle_);
-  
+
   // Re-send params from param server if not first connection
   parameter_bias_update_required_ = true;
   parameter_update_required_ = true;
-  
+
   // camera info handling
   ros::NodeHandle nh_ns(ns);
   if(camera_info_manager_){
     delete camera_info_manager_;
   }
-  
+
   camera_info_manager_ = new camera_info_manager::CameraInfoManager(nh_ns, device_id_);
 
   // initialize timestamps
   resetTimestamps();
   reset_time_ = ros::Time::now();
-  
+
   // spawn threads
   running_ = true;
   parameter_thread_ = boost::shared_ptr< boost::thread >(new boost::thread(boost::bind(&DavisRosDriver::changeDvsParameters, this)));
@@ -342,7 +342,7 @@ void DavisRosDriver::callback(davis_ros_driver::DAVIS_ROS_DriverConfig &config, 
 
 void DavisRosDriver::readout()
 {
- 
+
   //std::vector<dvs::Event> events;
 
   caerDeviceDataStart(davis_handle_, NULL, NULL, NULL, &DavisRosDriver::onDisconnectUSB, this);
@@ -350,9 +350,7 @@ void DavisRosDriver::readout()
 
   boost::posix_time::ptime next_send_time = boost::posix_time::microsec_clock::local_time();
 
-  dvs_msgs::EventArrayPtr event_array_msg(new dvs_msgs::EventArray());
-  event_array_msg->height = davis_info_.dvsSizeY;
-  event_array_msg->width = davis_info_.dvsSizeX;
+  dvs_msgs::EventArrayPtr event_array_msg;
 
   while (running_)
   {
@@ -377,6 +375,13 @@ void DavisRosDriver::readout()
         // Packet 0 is always the special events packet for DVS128, while packet is the polarity events packet.
         if (i == POLARITY_EVENT)
         {
+          if (!event_array_msg)
+          {
+            event_array_msg = dvs_msgs::EventArrayPtr(new dvs_msgs::EventArray());
+            event_array_msg->height = davis_info_.dvsSizeY;
+            event_array_msg->width = davis_info_.dvsSizeX;
+          }
+
           caerPolarityEventPacket polarity = (caerPolarityEventPacket) packetHeader;
 
           const int numEvents = caerEventPacketHeaderGetEventNumber(packetHeader);
@@ -387,7 +392,7 @@ void DavisRosDriver::readout()
 
             dvs_msgs::Event e;
             e.x = caerPolarityEventGetX(event);
-            e.y = davis_info_.dvsSizeY - 1 - caerPolarityEventGetY(event);
+            e.y = caerPolarityEventGetY(event);
             e.ts = reset_time_ + ros::Duration(caerPolarityEventGetTimestamp64(event, polarity) / 1.e6);
             e.polarity = caerPolarityEventGetPolarity(event);
 
@@ -401,11 +406,13 @@ void DavisRosDriver::readout()
              )
           {
             event_array_pub_.publish(event_array_msg);
-            event_array_msg->events.clear();
+
             if (current_config_.streaming_rate > 0)
               next_send_time += delta_;
             if (current_config_.max_events != 0 && event_array_msg->events.size() > current_config_.max_events)
               next_send_time = boost::posix_time::microsec_clock::local_time() + delta_;
+
+            event_array_msg.reset();
           }
 
           if (camera_info_manager_->isCalibrated())
@@ -425,15 +432,13 @@ void DavisRosDriver::readout()
             caerIMU6Event event = caerIMU6EventPacketGetEvent(imu, j);
 
             sensor_msgs::Imu msg;
-            // NED -> ROS ENU Conversion:  (x y z) -> (x -y -z)
-            // https://github.com/cra-ros-pkg/robot_localization/issues/22
-            // convert from g's to m/s^2
-            msg.linear_acceleration.x = caerIMU6EventGetAccelX(event) * STANDARD_GRAVITY;
-            msg.linear_acceleration.y = -caerIMU6EventGetAccelY(event) * STANDARD_GRAVITY;
+            // convert from g's to m/s^2 and align axes with camera frame
+            msg.linear_acceleration.x = -caerIMU6EventGetAccelX(event) * STANDARD_GRAVITY;
+            msg.linear_acceleration.y = caerIMU6EventGetAccelY(event) * STANDARD_GRAVITY;
             msg.linear_acceleration.z = -caerIMU6EventGetAccelZ(event) * STANDARD_GRAVITY;
-            // convert from deg/s to rad/s
-            msg.angular_velocity.x = caerIMU6EventGetGyroX(event) / 180.0 * M_PI;
-            msg.angular_velocity.y = -caerIMU6EventGetGyroY(event) / 180.0 * M_PI;
+            // convert from deg/s to rad/s and align axes with camera frame
+            msg.angular_velocity.x = -caerIMU6EventGetGyroX(event) / 180.0 * M_PI;
+            msg.angular_velocity.y = caerIMU6EventGetGyroY(event) / 180.0 * M_PI;
             msg.angular_velocity.z = -caerIMU6EventGetGyroZ(event) / 180.0 * M_PI;
 
             // no orientation estimate: http://docs.ros.org/api/sensor_msgs/html/msg/Imu.html
@@ -486,7 +491,7 @@ void DavisRosDriver::readout()
           msg.height = davis_info_.apsSizeY;
           msg.step = davis_info_.apsSizeX;
 
-          // image data: y-axis must be flipped
+          // image data
           const int32_t frame_width = caerFrameEventGetLengthX(event);
           const int32_t frame_height= caerFrameEventGetLengthY(event);
 
@@ -494,7 +499,7 @@ void DavisRosDriver::readout()
           {
             for (int img_x=0; img_x<frame_width; img_x++)
             {
-              const uint16_t value = image[(frame_height - 1 - img_y)*frame_width + img_x];
+              const uint16_t value = image[img_y*frame_width + img_x];
               //msg.data.push_back(value & 0xff);
               msg.data.push_back(value >> 8);
             }

@@ -156,6 +156,7 @@ void Renderer::publishImageAndClearEvents()
   if (image_pub_.getNumSubscribers() > 0)
   {
     cv_bridge::CvImage cv_image;
+    cv_image.header.stamp = events_[events_.size()/2].ts;
 
     if (display_method_ == RED_BLUE)
     {
@@ -226,8 +227,6 @@ void Renderer::publishImageAndClearEvents()
       }
 
     }
-
-    cv_image.header.stamp = events_[events_.size()/2].ts;
 
     image_pub_.publish(cv_image.toImageMsg());
 

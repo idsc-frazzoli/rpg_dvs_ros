@@ -10,9 +10,10 @@ include(ExternalProject)
 file(MAKE_DIRECTORY ${CATKIN_DEVEL_PREFIX}/include/libcaer)
 
 ExternalProject_Add(libcaer_src
-  SVN_REPOSITORY https://svn.code.sf.net/p/jaer/code/libcaer/trunk
-  SVN_REVISION -r8075
+  GIT_REPOSITORY https://github.com/inilabs/libcaer.git
+  GIT_TAG 57466910da84c25231aab57e99f246239722a628
   UPDATE_COMMAND ""
+  PATCH_COMMAND patch -p1 -t -N < ${CMAKE_CURRENT_SOURCE_DIR}/libcaer-startup.patch
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CATKIN_DEVEL_PREFIX} -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_INSTALL_LIBDIR=${CATKIN_DEVEL_PREFIX}/lib
   BUILD_COMMAND make
   INSTALL_COMMAND make install
