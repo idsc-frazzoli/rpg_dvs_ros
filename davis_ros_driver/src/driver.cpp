@@ -60,7 +60,6 @@ DavisRosDriver::DavisRosDriver(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   bias.angular_velocity.y = 0.0;
   bias.angular_velocity.z = 0.0;
 
-
   // set namespace
   ns = ros::this_node::getNamespace();
   if (ns == "/")
@@ -70,6 +69,18 @@ DavisRosDriver::DavisRosDriver(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   camera_info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>(ns + "/camera_info", 1);
   imu_pub_ = nh_.advertise<sensor_msgs::Imu>(ns + "/imu", 10);
   image_pub_ = nh_.advertise<sensor_msgs::Image>(ns + "/image_raw", 1);
+
+  device_type_ = CAER_DEVICE_DAVIS_FX2;
+  std::string model = nh_private.param("model", std::string("DAVIS_FX2"));
+  if (model == "DAVIS_FX3")
+  {
+    device_type_ = CAER_DEVICE_DAVIS_FX3;
+    
+    // Ugly bias fix. Hardware bug?
+    bias.linear_acceleration.x = 0.59020;
+    bias.linear_acceleration.y = 0.25995;
+    bias.linear_acceleration.z = 2.97717;
+  }
 
   caerConnect();
   current_config_.streaming_rate = 30;
@@ -114,7 +125,7 @@ void DavisRosDriver::caerConnect()
   while (!dvs_running)
   {
     //driver_ = new dvs::DvsDriver(dvs_serial_number, master);
-    davis_handle_ = caerDeviceOpen(1, CAER_DEVICE_DAVIS_FX2, 0, 0, NULL);
+    davis_handle_ = caerDeviceOpen(1, device_type_, 0, 0, NULL);
 
     //dvs_running = driver_->isDeviceRunning();
     dvs_running = !(davis_handle_ == NULL);
@@ -523,7 +534,8 @@ void DavisRosDriver::readout()
             caerIMU6Event event = caerIMU6EventPacketGetEvent(imu, j);
 
             sensor_msgs::Imu msg;
-            if (davis_info_.chipID == DAVIS_CHIP_DAVIS346B)
+            if (davis_info_.chipID == DAVIS_CHIP_DAVIS346B &&
+                device_type_ == CAER_DEVICE_DAVIS_FX2)
             {
               // convert from g's to m/s^2 and align axes with camera frame
               msg.linear_acceleration.x = -caerIMU6EventGetAccelY(event) * STANDARD_GRAVITY;
