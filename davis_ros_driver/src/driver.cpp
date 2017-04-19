@@ -71,6 +71,11 @@ DavisRosDriver::DavisRosDriver(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   imu_pub_ = nh_.advertise<sensor_msgs::Imu>(ns + "/imu", 10);
   image_pub_ = nh_.advertise<sensor_msgs::Image>(ns + "/image_raw", 1);
 
+  device_type_ = CAER_DEVICE_DAVIS_FX2;
+  std::string model = nh_private.param("model", std::string("DAVIS_FX2"));
+  if (model == "DAVIS_FX3")
+    device_type_ = CAER_DEVICE_DAVIS_FX3;
+
   caerConnect();
   current_config_.streaming_rate = 30;
   delta_ = boost::posix_time::microseconds(1e6/current_config_.streaming_rate);
@@ -114,7 +119,7 @@ void DavisRosDriver::caerConnect()
   while (!dvs_running)
   {
     //driver_ = new dvs::DvsDriver(dvs_serial_number, master);
-    davis_handle_ = caerDeviceOpen(1, CAER_DEVICE_DAVIS_FX2, 0, 0, NULL);
+    davis_handle_ = caerDeviceOpen(1, device_type_, 0, 0, NULL);
 
     //dvs_running = driver_->isDeviceRunning();
     dvs_running = !(davis_handle_ == NULL);
@@ -278,7 +283,7 @@ void DavisRosDriver::changeDvsParameters()
         caerDeviceConfigSet(davis_handle_, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_RUN, current_config_.imu_enabled);
 
         caerDeviceConfigSet(davis_handle_,DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_SAMPLE_RATE_DIVIDER,
-                            current_config_.imu_100_hz ? 9 : 0);
+                            current_config_.imu_1khz ? 0 : 9);
 
         if (current_config_.imu_gyro_scale >= 0 && current_config_.imu_gyro_scale <= 3)
           caerDeviceConfigSet(davis_handle_, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_GYRO_FULL_SCALE, current_config_.imu_gyro_scale);
@@ -391,7 +396,7 @@ void DavisRosDriver::callback(davis_ros_driver::DAVIS_ROS_DriverConfig &config, 
        current_config_.aps_enabled != config.aps_enabled || current_config_.dvs_enabled != config.dvs_enabled ||
        current_config_.imu_enabled != config.imu_enabled || current_config_.imu_acc_scale != config.imu_acc_scale ||
        current_config_.imu_gyro_scale != config.imu_gyro_scale || current_config_.max_events != config.max_events ||
-       current_config_.imu_100_hz != config.imu_100_hz)
+       current_config_.imu_1khz != config.imu_1khz)
    {
      current_config_.exposure = config.exposure;
      current_config_.frame_delay = config.frame_delay;
@@ -405,7 +410,7 @@ void DavisRosDriver::callback(davis_ros_driver::DAVIS_ROS_DriverConfig &config, 
 
      current_config_.max_events = config.max_events;
 
-     current_config_.imu_100_hz = config.imu_100_hz;
+     current_config_.imu_1khz = config.imu_1khz;
 
      parameter_update_required_ = true;
    }
