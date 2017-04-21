@@ -534,7 +534,9 @@ void DavisRosDriver::readout()
             caerIMU6Event event = caerIMU6EventPacketGetEvent(imu, j);
 
             sensor_msgs::Imu msg;
-            if (davis_info_.chipID == DAVIS_CHIP_DAVIS346B)
+            // Hack for detecting Insightness Silicon Eye
+            if (device_type_ == CAER_DEVICE_DAVIS_FX2 &&
+                davis_info_.chipID == DAVIS_CHIP_DAVIS346B)
             {
               // convert from g's to m/s^2 and align axes with camera frame
               msg.linear_acceleration.x = -caerIMU6EventGetAccelY(event) * STANDARD_GRAVITY;
