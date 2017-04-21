@@ -148,8 +148,8 @@ void DavisRosDriver::caerConnect()
     device_id_ = "DAVIS-" + std::string(davis_info_.deviceString).substr(18, 8);
   }
 
-  ROS_INFO("%s --- ID: %d, Master: %d, DVS X: %d, DVS Y: %d, Logic: %d.\n", davis_info_.deviceString,
-          davis_info_.deviceID, davis_info_.deviceIsMaster, davis_info_.dvsSizeX, davis_info_.dvsSizeY,
+  ROS_INFO("%s --- deviceId: %d, chipId: %d, Master: %d, DVS X: %d, DVS Y: %d, Logic: %d.\n", davis_info_.deviceString,
+          davis_info_.deviceID, davis_info_.chipID, davis_info_.deviceIsMaster, davis_info_.dvsSizeX, davis_info_.dvsSizeY,
           davis_info_.logicVersion);
 
   // Send the default configuration before using the device.
