@@ -1,6 +1,7 @@
 <launch>   
    <node name="davis_ros_driver" pkg="davis_ros_driver" type="davis_ros_driver" output="screen">
      <param name="model" value="DAVIS_FX3" />
+     <param name="imu_1khz" value="true" />
      <param name="exposure" value="1000" />
    </node>
 </launch>
