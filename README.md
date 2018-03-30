@@ -1,6 +1,5 @@
 rpg_dvs_ros
 ===========
-from DS lab zurich.
 
 # Disclaimer and License
 
